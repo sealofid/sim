@@ -41,7 +41,9 @@ class Config:
     #        + move_coef * size**2 * speed**2 * moved_fraction    (movement, your speed^2 rule)
     #        + sense_coef * sense**2                              (sensing = scanned area)
     base_metabolism: float = 0.02
+    metabolism_exponent: float = 2.0   # metabolism ∝ size**this (Kleiber-ish; 3=harsh, lower=kinder to big)
     move_coef: float = 0.02
+    move_size_exponent: float = 1.0    # movement size penalty ∝ size**this
     sense_coef: float = 0.0002
     food_energy: float = 1.0
 
@@ -68,13 +70,17 @@ class Config:
     max_lifespan: int = 400       # ticks; set very large to effectively disable
 
     # --- predation (size lets you eat smaller creatures) ----------------
-    predation_ratio: float = 1.3  # predator.size must be >= prey.size * ratio
-    predation_gain: float = 5.0   # energy gained = predation_gain * prey.size
+    #   Eating a creature yields its body value (predation_gain * prey.size) PLUS
+    #   a share of the calories it had saved (predation_steal * prey.energy) -- so
+    #   fat, well-stocked prey are a prize and growing big to hunt them pays off.
+    predation_ratio: float = 1.2     # predator.size must be >= prey.size * ratio
+    predation_gain: float = 6.0      # body-value energy = predation_gain * prey.size
+    predation_steal: float = 0.6     # fraction of the prey's banked energy absorbed
 
     # --- food supply = carrying capacity --------------------------------
-    food_per_tick: float = 8.0    # new pellets spawned per tick (may be fractional)
-    food_max: int = 1500          # max pellets allowed on the board at once
-    initial_food: int = 400       # pellets present at tick 0
+    food_per_tick: float = 15.0   # new pellets spawned per tick (may be fractional)
+    food_max: int = 2200          # max pellets allowed on the board at once
+    initial_food: int = 600       # pellets present at tick 0
 
     # --- droughts (an environmental shock that only kicks in later) ------
     #   Starting at drought_start, food spawning drops to drought_food_factor
@@ -84,8 +90,8 @@ class Config:
     drought_enabled: bool = True
     drought_start: int = 12000    # no droughts before this tick
     drought_interval: int = 2500  # one drought cycle every N ticks (from start)
-    drought_duration: int = 400   # how long each drought lasts
-    drought_food_factor: float = 0.4   # food spawn multiplier during a drought
+    drought_duration: int = 350   # how long each drought lasts
+    drought_food_factor: float = 0.5   # food spawn multiplier during a drought
 
     # --- safety caps ---
     max_population: int = 3000    # performance guard; reproduction pauses if reached

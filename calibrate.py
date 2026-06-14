@@ -32,6 +32,7 @@ def trial(cfg):
     return {"end_reason": world.end_reason, "mid": mid, "end": last["population"],
             "speed": last["mean_speed"], "sense": last["mean_sense"],
             "size": last["mean_size"], "reserve": last["mean_reserve"],
+            "pred": sum(s["predation_events"] for s in ts),
             "gen": last["max_generation"]}
 
 
@@ -56,7 +57,7 @@ def run_variant(name, **overrides):
     end_pops = [r["end"] for r in rows]
     mid_pops = [r["mid"] for r in rows]
     v = verdict(end_reasons, end_pops, Config().max_population)
-    print("%-30s  %-9s  mid~%4d  end~%4d  speed %.2f sense %.1f size %.2f reserve %.2f  gen~%d"
+    print("%-30s  %-9s  mid~%4d  end~%4d  speed %.2f sense %.1f size %.2f reserve %.2f  pred~%d  gen~%d"
           % (name, v,
              round(statistics.mean(mid_pops)),
              round(statistics.mean(end_pops)),
@@ -64,6 +65,7 @@ def run_variant(name, **overrides):
              statistics.mean(r["sense"] for r in rows),
              statistics.mean(r["size"] for r in rows),
              statistics.mean(r["reserve"] for r in rows),
+             round(statistics.mean(r["pred"] for r in rows)),
              round(statistics.mean(r["gen"] for r in rows))))
 
 

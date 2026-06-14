@@ -289,7 +289,9 @@ class World:
                         self.deaths += 1
                         self.predation_events += 1
                         self._record_death(prey)
-                        c.energy += cfg.predation_gain * prey.size
+                        # body value + a share of the prey's saved calories
+                        c.energy += (cfg.predation_gain * prey.size
+                                     + cfg.predation_steal * prey.energy)
                 else:
                     if best_i not in eaten_food:
                         eaten_food.add(best_i)
@@ -299,8 +301,8 @@ class World:
 
             # --- pay energy cost for the tick (incl. upkeep of the tank) ---
             moved_fraction = moved / c.speed if c.speed > 0 else 0.0
-            cost = (cfg.base_metabolism * c.size ** 3
-                    + cfg.move_coef * c.size * c.size * c.speed * c.speed * moved_fraction
+            cost = (cfg.base_metabolism * c.size ** cfg.metabolism_exponent
+                    + cfg.move_coef * c.size ** cfg.move_size_exponent * c.speed * c.speed * moved_fraction
                     + cfg.sense_coef * sense_sq
                     + cfg.storage_upkeep * c.size * c.reserve)
             c.energy -= cost

@@ -35,9 +35,10 @@
 <body>
 <header>
   <h1>🧬 Evolution Simulation</h1>
-  <p class="sub">Creatures forage food for energy, pay to move (∝ speed²), sense (∝ sense²) and exist (∝ size³),
-     can store calories (the <b>reserve</b> trait, scaled by size) and pass slightly-mutated traits to their
-     offspring. Later in the run, recurring <b>droughts</b> (shaded) slash the food supply. Watch selection respond.</p>
+  <p class="sub">Creatures forage food for energy, pay to move (∝ speed²), sense (∝ sense²) and exist (∝ size²).
+     Bigger creatures can <b>prey on</b> smaller ones — stealing their stored calories — while the <b>reserve</b>
+     trait lets them bank food for lean times. Traits mutate slightly each birth; recurring <b>droughts</b> (shaded)
+     strike later in the run. Watch selection respond.</p>
 </header>
 
 <div id="error">
@@ -65,9 +66,10 @@
   </div>
 
   <div class="card">
-    <h2>Population &amp; food over time</h2>
-    <p class="note">Population (left axis) against available food pellets (right axis). Shaded bands are droughts —
-       watch the population crash and rebound around each one.</p>
+    <h2>Population &amp; predation over time</h2>
+    <p class="note">Population (left axis) against <span style="color:#f0883e">predation kills</span> per sample
+       (right axis). Cannibalism climbs as creatures evolve bigger; shaded bands are droughts, where the
+       population crashes and rebounds.</p>
     <div id="popPlot" class="plot"></div>
   </div>
 
@@ -109,6 +111,7 @@ function render(d){
     statCard("Final population", meta.final_population),
     statCard("Generations reached", meta.generations_reached),
     statCard("Founders", meta.config.start_population),
+    statCard("Predation kills", ts.reduce((a,s)=>a+s.predation_events,0).toLocaleString()),
     statCard("Droughts", meta.config.drought_enabled
         ? ("from tick " + meta.config.drought_start.toLocaleString()) : "off"),
     statCard("Compute time", meta.wall_seconds + "s"),
@@ -175,13 +178,13 @@ function render(d){
   Plotly.newPlot("popPlot", [
     { x:tx, y:ts.map(s=>s.population), name:"population", mode:"lines",
       line:{color:COLORS.pop, width:2} },
-    { x:tx, y:ts.map(s=>s.food_count), name:"food", mode:"lines", yaxis:"y2",
-      line:{color:COLORS.food, width:1.5, dash:"dot"} },
+    { x:tx, y:ts.map(s=>s.predation_events), name:"predation kills / sample", mode:"lines", yaxis:"y2",
+      line:{color:COLORS.size, width:1.5} },
   ], Object.assign({}, LAYOUT, {
       xaxis:Object.assign({title:"tick"}, LAYOUT.xaxis),
       yaxis:Object.assign({title:"population"}, LAYOUT.yaxis),
-      yaxis2:{ title:"food", overlaying:"y", side:"right",
-               gridcolor:"transparent", color:"#8b949e" },
+      yaxis2:{ title:"predation kills / sample", overlaying:"y", side:"right",
+               gridcolor:"transparent", color:"#f0883e", rangemode:"tozero" },
       shapes:droughts,
     }), CONFIG);
 

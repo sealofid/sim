@@ -15,18 +15,23 @@ Each creature has four heritable traits:
 |-----------|-------------------------------------------------|----------------------|
 | `speed`   | reach food faster (more distance per tick)      | **speed²** when moving |
 | `sense`   | spot food / prey from farther away              | **sense²** (scanned area) |
-| `size`    | eat smaller creatures (predation)               | **size³** metabolism, **size²** drag |
+| `size`    | eat smaller creatures (predation)               | **size²** metabolism, **size** drag |
 | `reserve` | **bank surplus calories** for lean times        | **upkeep ∝ size·reserve** every tick |
 
 Energy is measured in food units (1 pellet = 1 energy). Each tick a creature pays:
 
 ```
-cost = base_metabolism·size³ + move_coef·size²·speed²·(fraction moved)
+cost = base_metabolism·size^metabolism_exponent
+       + move_coef·size^move_size_exponent·speed²·(fraction moved)
        + sense_coef·sense² + storage_upkeep·size·reserve
 ```
 
+(`metabolism_exponent` defaults to 2 and `move_size_exponent` to 1 — gentle enough on big bodies that
+predation is a viable strategy. Crank `metabolism_exponent` toward 3 to punish size again.)
+
 - **Eat** to gain energy: a food pellet gives 1; eating a creature ≥ `predation_ratio`× smaller
-  gives `predation_gain · prey.size`.
+  gives `predation_gain · prey.size` (body value) **plus `predation_steal` × the prey's banked
+  energy** — so fat, well-fed prey are a windfall, and growing big enough to hunt them pays off.
 - **Store** energy up to a cap `storage_base + storage_per_size · size · reserve`. Food eaten beyond
   the cap is **wasted**, so a bigger tank lets a creature stockpile. The tank costs a little upkeep
   every tick, so reserves are dead weight in plenty but life-saving in a drought.
@@ -97,17 +102,19 @@ The dashboard goes live at `https://<user>.github.io/<repo>/`.
 
 ## A sample result
 
-The default run (24k ticks, seed 1) evolved **148 generations**:
+The default run (24k ticks, seed 1) evolved **~165 generations** with **~1,900 predation kills**:
 
-- **speed** rose ~1.0 → **3.8** — reaching food first is strongly favoured.
-- **size** fell ~1.0 → **0.34** — small bodies dodge the size³ metabolism tax.
-- **sense** held roughly steady (~15).
-- **reserve** told the prettiest story: it drifted *down* (~1.0 → 0.92) during the long pre-drought
-  plenty (stored fat is just upkeep when food is everywhere), then climbed *back up* (~1.1–1.2) once
-  the droughts began and stockpiling started saving lives — the classic thrifty-gene tradeoff.
+- **size** rose ~1.0 → **~1.9** (peaks above 2) — with metabolism only ∝ size² and predation paying
+  off, growing big to eat your neighbours became a winning strategy. Cannibalism is now a major
+  ecological force rather than a curiosity.
+- **speed** rose ~1.0 → **~2** — still useful for catching food and prey.
+- **sense** held roughly steady (~13).
+- **reserve** tells the thrifty-gene story: it stays near 1 in plenty, then is held up by the droughts
+  (and by the value of carrying calories a predator can't always replace).
 
-Each drought crashed the population to a handful of survivors (min ~9) before it rebounded — a
-textbook evolutionary bottleneck.
+Each drought still crashes the (smaller, predator-heavy) population to a handful of survivors before
+it rebounds — a textbook bottleneck. Predator ecosystems carry fewer individuals, so the droughts are
+tuned gentler than they'd need to be for a pure-forager world.
 
 ## Files
 
