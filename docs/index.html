@@ -36,7 +36,8 @@
 <header>
   <h1>🧬 Evolution Simulation</h1>
   <p class="sub">Creatures forage food for energy, pay to move (∝ speed²), sense (∝ sense²) and exist (∝ size³),
-     and pass slightly-mutated traits to their offspring. Watch natural selection reshape the population.</p>
+     can store calories (the <b>reserve</b> trait, scaled by size) and pass slightly-mutated traits to their
+     offspring. Later in the run, recurring <b>droughts</b> (shaded) slash the food supply. Watch selection respond.</p>
 </header>
 
 <div id="error">
@@ -65,13 +66,15 @@
 
   <div class="card">
     <h2>Population &amp; food over time</h2>
-    <p class="note">Population (left axis) against available food pellets (right axis) over the run.</p>
+    <p class="note">Population (left axis) against available food pellets (right axis). Shaded bands are droughts —
+       watch the population crash and rebound around each one.</p>
     <div id="popPlot" class="plot"></div>
   </div>
 
   <div class="card">
     <h2>Mean traits over time</h2>
-    <p class="note">Population-average traits each sample tick, relative to the founding mean.</p>
+    <p class="note">Population-average traits each sample tick, relative to the founding mean. Drought bands shaded;
+       note how <span style="color:#bc8cff">reserve</span> dips in plenty then climbs once droughts begin.</p>
     <div id="traitTime" class="plot"></div>
   </div>
 </div>
@@ -82,8 +85,8 @@
 </footer>
 
 <script>
-const COLORS = { speed:"#58a6ff", sense:"#3fb950", size:"#f0883e",
-                 pop:"#58a6ff", food:"#8b949e" };
+const COLORS = { speed:"#58a6ff", sense:"#3fb950", size:"#f0883e", reserve:"#bc8cff",
+                 pop:"#58a6ff", food:"#8b949e", drought:"rgba(210,153,34,0.13)" };
 const LAYOUT = {
   paper_bgcolor:"#161b22", plot_bgcolor:"#161b22",
   font:{ color:"#e6edf3" }, margin:{ l:54, r:54, t:10, b:44 },
@@ -106,12 +109,15 @@ function render(d){
     statCard("Final population", meta.final_population),
     statCard("Generations reached", meta.generations_reached),
     statCard("Founders", meta.config.start_population),
+    statCard("Droughts", meta.config.drought_enabled
+        ? ("from tick " + meta.config.drought_start.toLocaleString()) : "off"),
     statCard("Compute time", meta.wall_seconds + "s"),
   ].join("");
 
   // baselines from founding generation (gen 0) for relative views
-  const g0 = gens[0] || {mean_speed:base.mean_speed, mean_sense:base.mean_sense, mean_size:base.mean_size};
-  const b = { speed:g0.mean_speed||1, sense:g0.mean_sense||1, size:g0.mean_size||1 };
+  const g0 = gens[0] || {};
+  const b = { speed:g0.mean_speed||1, sense:g0.mean_sense||1,
+              size:g0.mean_size||1, reserve:g0.mean_reserve||1 };
 
   // ---- trait evolution across generations (relative lines) ----
   const gx = gens.map(g => g.generation);
@@ -122,6 +128,8 @@ function render(d){
       line:{color:COLORS.sense, width:2} },
     { x:gx, y:gens.map(g=>g.mean_size/b.size), name:"size", mode:"lines",
       line:{color:COLORS.size, width:2} },
+    { x:gx, y:gens.map(g=>g.mean_reserve/b.reserve), name:"reserve", mode:"lines",
+      line:{color:COLORS.reserve, width:2} },
   ], Object.assign({}, LAYOUT, {
       xaxis:Object.assign({title:"generation"}, LAYOUT.xaxis),
       yaxis:Object.assign({title:"mean trait (× founders)"}, LAYOUT.yaxis),
@@ -130,13 +138,13 @@ function render(d){
     }), CONFIG);
 
   // ---- animated per-generation bars ----
-  const traitNames = ["speed","sense","size"];
-  const barColor = [COLORS.speed, COLORS.sense, COLORS.size];
+  const traitNames = ["speed","sense","size","reserve"];
+  const barColor = [COLORS.speed, COLORS.sense, COLORS.size, COLORS.reserve];
   const frame = g => ({
     x: traitNames,
-    y: [g.mean_speed/b.speed, g.mean_sense/b.sense, g.mean_size/b.size],
+    y: [g.mean_speed/b.speed, g.mean_sense/b.sense, g.mean_size/b.size, g.mean_reserve/b.reserve],
     error_y: { type:"data", visible:true,
-               array:[g.std_speed/b.speed, g.std_sense/b.sense, g.std_size/b.size],
+               array:[g.std_speed/b.speed, g.std_sense/b.sense, g.std_size/b.size, g.std_reserve/b.reserve],
                color:"#c9d1d9" },
     type:"bar", marker:{ color:barColor },
   });
@@ -163,6 +171,7 @@ function render(d){
 
   // ---- population & food over time ----
   const tx = ts.map(s=>s.tick);
+  const droughts = droughtShapes(ts);
   Plotly.newPlot("popPlot", [
     { x:tx, y:ts.map(s=>s.population), name:"population", mode:"lines",
       line:{color:COLORS.pop, width:2} },
@@ -173,6 +182,7 @@ function render(d){
       yaxis:Object.assign({title:"population"}, LAYOUT.yaxis),
       yaxis2:{ title:"food", overlaying:"y", side:"right",
                gridcolor:"transparent", color:"#8b949e" },
+      shapes:droughts,
     }), CONFIG);
 
   // ---- mean traits over time (relative) ----
@@ -180,9 +190,11 @@ function render(d){
     { x:tx, y:ts.map(s=>s.mean_speed/b.speed), name:"speed", mode:"lines", line:{color:COLORS.speed} },
     { x:tx, y:ts.map(s=>s.mean_sense/b.sense), name:"sense", mode:"lines", line:{color:COLORS.sense} },
     { x:tx, y:ts.map(s=>s.mean_size/b.size), name:"size", mode:"lines", line:{color:COLORS.size} },
+    { x:tx, y:ts.map(s=>s.mean_reserve/b.reserve), name:"reserve", mode:"lines", line:{color:COLORS.reserve} },
   ], Object.assign({}, LAYOUT, {
       xaxis:Object.assign({title:"tick"}, LAYOUT.xaxis),
       yaxis:Object.assign({title:"mean trait (× founders)"}, LAYOUT.yaxis),
+      shapes:droughts,
     }), CONFIG);
 }
 
@@ -191,9 +203,26 @@ function maxBar(gens, b){
   for(const g of gens){
     m = Math.max(m, g.mean_speed/b.speed + g.std_speed/b.speed,
                     g.mean_sense/b.sense + g.std_sense/b.sense,
-                    g.mean_size/b.size + g.std_size/b.size);
+                    g.mean_size/b.size + g.std_size/b.size,
+                    g.mean_reserve/b.reserve + g.std_reserve/b.reserve);
   }
   return m * 1.05;
+}
+
+// Contiguous drought spans -> shaded vertical rectangles on the tick axis.
+function droughtShapes(ts){
+  const shapes = [];
+  let start = null;
+  for(let i=0; i<ts.length; i++){
+    if(ts[i].drought && start===null){ start = ts[i].tick; }
+    else if(!ts[i].drought && start!==null){ shapes.push(rect(start, ts[i].tick)); start = null; }
+  }
+  if(start!==null) shapes.push(rect(start, ts[ts.length-1].tick));
+  return shapes;
+  function rect(x0, x1){
+    return { type:"rect", xref:"x", yref:"paper", x0, x1, y0:0, y1:1,
+             fillcolor:COLORS.drought, line:{width:0}, layer:"below" };
+  }
 }
 
 fetch("results.json")

@@ -19,16 +19,18 @@ import random
 
 
 class Creature:
-    __slots__ = ("x", "y", "energy", "speed", "sense", "size",
-                 "age", "cooldown", "generation", "alive")
+    __slots__ = ("x", "y", "energy", "speed", "sense", "size", "reserve",
+                 "cap", "age", "cooldown", "generation", "alive")
 
-    def __init__(self, x, y, energy, speed, sense, size, generation):
+    def __init__(self, x, y, energy, speed, sense, size, reserve, cap, generation):
         self.x = x
         self.y = y
-        self.energy = energy
         self.speed = speed
         self.sense = sense
         self.size = size
+        self.reserve = reserve     # calorie-storage trait
+        self.cap = cap             # max energy this creature can bank
+        self.energy = energy if energy < cap else cap
         self.age = 0
         self.cooldown = 0          # ticks since birth / last reproduction
         self.generation = generation
@@ -94,6 +96,19 @@ class World:
         self._spawn_founders()
         self._spawn_initial_food()
 
+    # ---- helpers -------------------------------------------------------
+    def _cap(self, size, reserve):
+        """Max energy a creature of this size/reserve can bank."""
+        cfg = self.cfg
+        return cfg.storage_base + cfg.storage_per_size * size * reserve
+
+    def _in_drought(self, tick):
+        cfg = self.cfg
+        if not cfg.drought_enabled or tick < cfg.drought_start:
+            return False
+        phase = (tick - cfg.drought_start) % cfg.drought_interval
+        return phase < cfg.drought_duration
+
     # ---- setup ---------------------------------------------------------
     def _spawn_founders(self):
         cfg = self.cfg
@@ -103,11 +118,13 @@ class World:
             speed = cfg.base_speed * (1 + rng.uniform(-s, s))
             sense = cfg.base_sense * (1 + rng.uniform(-s, s))
             size = cfg.base_size * (1 + rng.uniform(-s, s))
+            reserve = cfg.base_reserve * (1 + rng.uniform(-s, s))
             c = Creature(
                 x=rng.uniform(0, cfg.world_width),
                 y=rng.uniform(0, cfg.world_height),
                 energy=cfg.start_energy,
-                speed=speed, sense=sense, size=size, generation=0,
+                speed=speed, sense=sense, size=size, reserve=reserve,
+                cap=self._cap(size, reserve), generation=0,
             )
             self.creatures.append(c)
             self._record_birth(c)
@@ -123,7 +140,8 @@ class World:
         g = self._gen.get(c.generation)
         if g is None:
             g = {"n": 0, "s_sp": 0.0, "ss_sp": 0.0, "s_se": 0.0, "ss_se": 0.0,
-                 "s_si": 0.0, "ss_si": 0.0, "n_dead": 0, "s_life": 0.0}
+                 "s_si": 0.0, "ss_si": 0.0, "s_re": 0.0, "ss_re": 0.0,
+                 "n_dead": 0, "s_life": 0.0}
             self._gen[c.generation] = g
         g["n"] += 1
         g["s_sp"] += c.speed
@@ -132,6 +150,8 @@ class World:
         g["ss_se"] += c.sense * c.sense
         g["s_si"] += c.size
         g["ss_si"] += c.size * c.size
+        g["s_re"] += c.reserve
+        g["ss_re"] += c.reserve * c.reserve
 
     def _record_death(self, c):
         g = self._gen.get(c.generation)
@@ -142,7 +162,10 @@ class World:
     # ---- food ----------------------------------------------------------
     def _spawn_food(self):
         cfg = self.cfg
-        self._food_accum += cfg.food_per_tick
+        rate = cfg.food_per_tick
+        if self._in_drought(self.tick):
+            rate *= cfg.drought_food_factor
+        self._food_accum += rate
         n = int(self._food_accum)
         self._food_accum -= n
         room = cfg.food_max - len(self.food)
@@ -258,7 +281,7 @@ class World:
             elif c.y > cfg.world_height:
                 c.y = cfg.world_height
 
-            # --- eat what we reached ---
+            # --- eat what we reached (banked energy is capped by storage) ---
             if target_x is not None and reached:
                 if target_is_prey:
                     if prey.alive:
@@ -271,12 +294,15 @@ class World:
                     if best_i not in eaten_food:
                         eaten_food.add(best_i)
                         c.energy += cfg.food_energy
+                if c.energy > c.cap:        # surplus beyond the tank is wasted
+                    c.energy = c.cap
 
-            # --- pay energy cost for the tick ---
+            # --- pay energy cost for the tick (incl. upkeep of the tank) ---
             moved_fraction = moved / c.speed if c.speed > 0 else 0.0
             cost = (cfg.base_metabolism * c.size ** 3
                     + cfg.move_coef * c.size * c.size * c.speed * c.speed * moved_fraction
-                    + cfg.sense_coef * sense_sq)
+                    + cfg.sense_coef * sense_sq
+                    + cfg.storage_upkeep * c.size * c.reserve)
             c.energy -= cost
 
             # --- death by starvation / old age ---
@@ -317,12 +343,13 @@ class World:
         speed = max(floor, parent.speed * (1 + rng.uniform(-m, m)))
         sense = max(floor, parent.sense * (1 + rng.uniform(-m, m)))
         size = max(floor, parent.size * (1 + rng.uniform(-m, m)))
+        reserve = max(floor, parent.reserve * (1 + rng.uniform(-m, m)))
         ang = rng.uniform(0, 2 * math.pi)
         r = rng.uniform(0, cfg.offspring_spawn_radius)
         x = min(max(parent.x + math.cos(ang) * r, 0.0), cfg.world_width)
         y = min(max(parent.y + math.sin(ang) * r, 0.0), cfg.world_height)
-        return Creature(x, y, cfg.offspring_energy, speed, sense, size,
-                        parent.generation + 1)
+        return Creature(x, y, cfg.offspring_energy, speed, sense, size, reserve,
+                        self._cap(size, reserve), parent.generation + 1)
 
     # ---- stats ---------------------------------------------------------
     def sample(self):
@@ -331,16 +358,18 @@ class World:
         rec = {"tick": self.tick, "population": n,
                "births": self.births, "deaths": self.deaths,
                "predation_events": self.predation_events,
-               "food_count": len(self.food)}
+               "food_count": len(self.food),
+               "drought": 1 if self._in_drought(self.tick) else 0}
         if n:
-            sp = se = si = en = ge = 0.0
-            sp2 = se2 = si2 = 0.0
+            sp = se = si = re = en = ge = 0.0
+            sp2 = se2 = si2 = re2 = 0.0
             gmax = 0
             for c in creatures:
-                sp += c.speed; se += c.sense; si += c.size
+                sp += c.speed; se += c.sense; si += c.size; re += c.reserve
                 sp2 += c.speed * c.speed
                 se2 += c.sense * c.sense
                 si2 += c.size * c.size
+                re2 += c.reserve * c.reserve
                 en += c.energy; ge += c.generation
                 if c.generation > gmax:
                     gmax = c.generation
@@ -348,13 +377,14 @@ class World:
                 "mean_speed": sp / n, "std_speed": _std(sp, sp2, n),
                 "mean_sense": se / n, "std_sense": _std(se, se2, n),
                 "mean_size": si / n, "std_size": _std(si, si2, n),
+                "mean_reserve": re / n, "std_reserve": _std(re, re2, n),
                 "mean_energy": en / n,
                 "mean_generation": ge / n, "max_generation": gmax,
             })
         else:
             for k in ("mean_speed", "std_speed", "mean_sense", "std_sense",
-                      "mean_size", "std_size", "mean_energy",
-                      "mean_generation", "max_generation"):
+                      "mean_size", "std_size", "mean_reserve", "std_reserve",
+                      "mean_energy", "mean_generation", "max_generation"):
                 rec[k] = 0.0
         self.timeseries.append(rec)
         # reset window counters
@@ -373,6 +403,7 @@ class World:
                 "mean_speed": d["s_sp"] / n, "std_speed": _std(d["s_sp"], d["ss_sp"], n),
                 "mean_sense": d["s_se"] / n, "std_sense": _std(d["s_se"], d["ss_se"], n),
                 "mean_size": d["s_si"] / n, "std_size": _std(d["s_si"], d["ss_si"], n),
+                "mean_reserve": d["s_re"] / n, "std_reserve": _std(d["s_re"], d["ss_re"], n),
                 "mean_lifespan": (d["s_life"] / d["n_dead"]) if d["n_dead"] else None,
             })
         return out

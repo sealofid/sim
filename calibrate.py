@@ -23,15 +23,16 @@ SEEDS = [1, 2, 3]
 
 
 def trial(cfg):
-    """Return (end_reason, mid_pop, end_pop, mean_speed, mean_sense, mean_size, max_gen)."""
+    """Return dict of end-of-run summary numbers for one simulation."""
     world = World(cfg)
     world.run()
     ts = world.timeseries
     mid = ts[len(ts) // 2]["population"] if ts else 0
     last = ts[-1]
-    return (world.end_reason, mid, last["population"],
-            last["mean_speed"], last["mean_sense"], last["mean_size"],
-            last["max_generation"])
+    return {"end_reason": world.end_reason, "mid": mid, "end": last["population"],
+            "speed": last["mean_speed"], "sense": last["mean_sense"],
+            "size": last["mean_size"], "reserve": last["mean_reserve"],
+            "gen": last["max_generation"]}
 
 
 def verdict(end_reasons, end_pops, cap):
@@ -51,33 +52,44 @@ def run_variant(name, **overrides):
         for k, v in overrides.items():
             setattr(cfg, k, v)
         rows.append(trial(cfg))
-    end_reasons = [r[0] for r in rows]
-    end_pops = [r[2] for r in rows]
-    mid_pops = [r[1] for r in rows]
+    end_reasons = [r["end_reason"] for r in rows]
+    end_pops = [r["end"] for r in rows]
+    mid_pops = [r["mid"] for r in rows]
     v = verdict(end_reasons, end_pops, Config().max_population)
-    print("%-28s  %-9s  mid~%4d  end~%4d  speed %.2f sense %.1f size %.2f  gen~%d"
+    print("%-30s  %-9s  mid~%4d  end~%4d  speed %.2f sense %.1f size %.2f reserve %.2f  gen~%d"
           % (name, v,
              round(statistics.mean(mid_pops)),
              round(statistics.mean(end_pops)),
-             statistics.mean(r[3] for r in rows),
-             statistics.mean(r[4] for r in rows),
-             statistics.mean(r[5] for r in rows),
-             round(statistics.mean(r[6] for r in rows))))
+             statistics.mean(r["speed"] for r in rows),
+             statistics.mean(r["sense"] for r in rows),
+             statistics.mean(r["size"] for r in rows),
+             statistics.mean(r["reserve"] for r in rows),
+             round(statistics.mean(r["gen"] for r in rows))))
 
 
 def main():
     print("Calibration sweep: %d ticks x seeds %s\n" % (TICKS, SEEDS))
-    print("%-28s  %-9s  %-9s %-9s  traits (final mean)             %s"
+    print("(droughts default to starting at tick 12000, so most rows run drought-free)\n")
+    print("%-30s  %-9s  %-9s %-9s  traits (final mean)                          %s"
           % ("variant", "verdict", "mid pop", "end pop", "gens"))
-    print("-" * 100)
-    run_variant("baseline (defaults)")
+    print("-" * 116)
+    run_variant("baseline (no drought reached)")
     run_variant("less food (food_per_tick=5)", food_per_tick=5.0)
     run_variant("more food (food_per_tick=12)", food_per_tick=12.0)
     run_variant("cheaper move (move_coef=0.01)", move_coef=0.01)
     run_variant("pricier move (move_coef=0.04)", move_coef=0.04)
     run_variant("cheaper sense (sense_coef=0.0001)", sense_coef=0.0001)
     run_variant("no predation (ratio huge)", predation_ratio=100.0)
-    print("\nAim for the baseline to read STABLE with a healthy mid/end population.")
+    print()
+    # --- drought stress tests: bring droughts forward so they actually fire ---
+    run_variant("early droughts (mild x0.35)",
+                drought_start=800, drought_interval=1000, drought_duration=400,
+                drought_food_factor=0.35)
+    run_variant("early droughts (harsh x0.20)",
+                drought_start=800, drought_interval=1000, drought_duration=400,
+                drought_food_factor=0.20)
+    print("\nBaseline should read STABLE. Drought rows should survive (not EXTINCT)")
+    print("and ideally show a HIGHER reserve than the drought-free baseline.")
 
 
 if __name__ == "__main__":

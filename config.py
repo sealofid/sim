@@ -17,7 +17,7 @@ class Config:
     world_height: float = 300.0
 
     # --- run length / sampling ---
-    ticks: int = 15000            # how many ticks the simulation runs
+    ticks: int = 24000            # how many ticks the simulation runs
     seed: int = 1                 # RNG seed -> fully reproducible runs
     sample_interval: int = 20     # record timeseries stats every N ticks
 
@@ -30,6 +30,7 @@ class Config:
     base_speed: float = 1.0
     base_sense: float = 15.0
     base_size: float = 1.0
+    base_reserve: float = 1.0     # calorie-storage trait (raises max energy)
 
     # --- trait mutation on reproduction (your <=5% rule) ---
     mutation: float = 0.05        # each offspring trait *= 1 + U(-mutation, +mutation)
@@ -43,6 +44,17 @@ class Config:
     move_coef: float = 0.02
     sense_coef: float = 0.0002
     food_energy: float = 1.0
+
+    # --- calorie storage (the "reserve" trait) --------------------------
+    #   A creature can bank at most:
+    #       max_energy = storage_base + storage_per_size * size * reserve
+    #   Food eaten beyond the cap is wasted, so a bigger tank lets a creature
+    #   stockpile for lean times. Maintaining the tank costs a little upkeep
+    #   each tick (storage_upkeep * size * reserve) so reserves are dead weight
+    #   in plenty but life-saving in a drought.
+    storage_base: float = 12.0    # baseline cap (kept >= reproduction_threshold)
+    storage_per_size: float = 18.0
+    storage_upkeep: float = 0.006
 
     # --- reproduction (asexual; only after a cooldown -- your spec) ------
     maturity_age: int = 40            # ticks from birth before first reproduction
@@ -63,6 +75,17 @@ class Config:
     food_per_tick: float = 8.0    # new pellets spawned per tick (may be fractional)
     food_max: int = 1500          # max pellets allowed on the board at once
     initial_food: int = 400       # pellets present at tick 0
+
+    # --- droughts (an environmental shock that only kicks in later) ------
+    #   Starting at drought_start, food spawning drops to drought_food_factor
+    #   for drought_duration ticks, repeating every drought_interval ticks.
+    #   The long pre-drought stretch is your "without droughts" baseline; the
+    #   later stretch is the same world *with* recurring famines.
+    drought_enabled: bool = True
+    drought_start: int = 12000    # no droughts before this tick
+    drought_interval: int = 2500  # one drought cycle every N ticks (from start)
+    drought_duration: int = 400   # how long each drought lasts
+    drought_food_factor: float = 0.4   # food spawn multiplier during a drought
 
     # --- safety caps ---
     max_population: int = 3000    # performance guard; reproduction pauses if reached

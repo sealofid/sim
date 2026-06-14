@@ -56,8 +56,11 @@ def build_config(args):
         if not hasattr(cfg, key):
             raise SystemExit("unknown config field: %s" % key)
         cur = getattr(cfg, key)
-        caster = type(cur)
-        setattr(cfg, key, caster(val))
+        if isinstance(cur, bool):
+            new = val.strip().lower() in ("1", "true", "yes", "on")
+        else:
+            new = type(cur)(val)
+        setattr(cfg, key, new)
     return cfg
 
 
@@ -113,10 +116,17 @@ def main():
         print("  ticks run:           %d" % m["ticks_run"])
         print("  final population:    %d" % m["final_population"])
         print("  generations reached: %d" % m["generations_reached"])
+        if cfg.drought_enabled:
+            print("  droughts:            from tick %d, %d-tick famines every %d ticks (food x%.2f)"
+                  % (cfg.drought_start, cfg.drought_duration, cfg.drought_interval,
+                     cfg.drought_food_factor))
+        else:
+            print("  droughts:            disabled")
         if world.timeseries:
             last = world.timeseries[-1]
-            print("  final mean traits:   speed %.3f | sense %.2f | size %.3f"
-                  % (last["mean_speed"], last["mean_sense"], last["mean_size"]))
+            print("  final mean traits:   speed %.3f | sense %.2f | size %.3f | reserve %.3f"
+                  % (last["mean_speed"], last["mean_sense"], last["mean_size"],
+                     last["mean_reserve"]))
         print("\n  wrote %s" % args.out)
         print("  wrote %s" % args.csv)
 
