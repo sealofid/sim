@@ -25,6 +25,12 @@
   .card h2 { margin:2px 6px 8px; font-size:15px; font-weight:600; }
   .card p.note { margin:0 6px 10px; color:var(--muted); font-size:12.5px; }
   .plot { width:100%; height:360px; }
+  table.traits { width:100%; border-collapse:collapse; margin:2px 4px 8px; font-size:13.5px; }
+  table.traits th, table.traits td { text-align:left; padding:8px 12px; border-bottom:1px solid var(--line); vertical-align:top; }
+  table.traits th { color:var(--muted); font-weight:600; font-size:11.5px; text-transform:uppercase; letter-spacing:.03em; }
+  table.traits td.t { font-weight:700; white-space:nowrap; }
+  table.traits td.c { font-family:ui-monospace,Menlo,monospace; color:#e6edf3; white-space:nowrap; }
+  table.traits tr:last-child td { border-bottom:none; }
   #error { display:none; margin:28px; padding:16px 20px; background:#3d1d1d;
            border:1px solid #6e2b2b; border-radius:10px; color:#ffb4b4; }
   code { background:#0b0f14; padding:1px 6px; border-radius:5px; color:var(--accent); }
@@ -51,6 +57,42 @@
 <div class="stats" id="stats"></div>
 
 <div class="grid">
+  <div class="card wide">
+    <h2>How each trait affects energy efficiency</h2>
+    <p class="note">Energy is in food units (1 pellet = 1). Each tick a creature spends
+       <code>metabolism + movement + sensing + storage upkeep</code> and eats to refill — run out and it dies.
+       Every trait buys an advantage but raises one of those costs, so selection chases the best <em>net</em> balance.</p>
+    <table class="traits">
+      <thead><tr><th>Trait</th><th>What it buys</th><th>Energy cost</th><th>Most efficient when…</th></tr></thead>
+      <tbody>
+        <tr>
+          <td class="t" style="color:#58a6ff">speed</td>
+          <td>Covers more ground per tick — reaches food and prey sooner and wins contested food.</td>
+          <td class="c">moving ∝ speed²</td>
+          <td>food is contested; wasteful once you're already well-fed.</td>
+        </tr>
+        <tr>
+          <td class="t" style="color:#3fb950">sense</td>
+          <td>Detects food and prey within a larger radius — heads straight to them instead of wandering.</td>
+          <td class="c">sensing ∝ sense²</td>
+          <td>food is sparse; pure waste when food is dense (why it stays flat here).</td>
+        </tr>
+        <tr>
+          <td class="t" style="color:#f0883e">size</td>
+          <td>Can eat creatures ≥1.2× smaller and steal their stored calories; harder to be eaten; bigger storage cap.</td>
+          <td class="c">metabolism ∝ size² + drag ∝ size</td>
+          <td>there's enough smaller prey to hunt to offset the higher upkeep.</td>
+        </tr>
+        <tr>
+          <td class="t" style="color:#bc8cff">reserve</td>
+          <td>Raises the max energy it can bank (cap = base + per_size·size·reserve) to stockpile surplus food.</td>
+          <td class="c">upkeep ∝ size·reserve / tick</td>
+          <td>famine looms; dead weight in plenty, lifesaver in a drought.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
   <div class="card wide">
     <h2>Trait evolution across generations</h2>
     <p class="note">Mean trait value per generation, relative to the founding population (gen 0 = 1.0).
